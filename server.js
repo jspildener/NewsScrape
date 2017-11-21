@@ -39,17 +39,18 @@ app.get("/scrape", function(req, res) {
                 "link": results[j].link,
                 "title": results[j].title
             };
-            saveArticle(article);
+            createArticle(article);
         }
         res.send("Scrape Complete");
     });
 });
 
-function saveArticle(article) {
+function createArticle(article) {
     axios.get(article.link).then(function(response) {
         var $ = cheerio.load(response.data);
         $("article #entryContent").each(function(i, element) {
             article.paragraph = $(this).children("p:first-child").text() || "Summary not available for this article.";
+            article.saveArticle = false;
             db.Article
                 .create(article).then(function(dbArticle) {})
                 .catch(function(err) {
@@ -59,6 +60,61 @@ function saveArticle(article) {
         });
     });
 }
+
+app.get("/articles", function(req, res) {
+   db.Article.find({})
+    .then(function(dbArticle) {
+      res.json(dbArticle);
+    })
+    .catch(function(err) {
+      res.json(err);
+    });
+});
+
+app.get("/savedarticles", function(req, res) {
+    db.Article.find({ saveArticle: true })
+    .populate("note")
+    .then(function(dbArticle) {
+      res.json(dbArticle);
+    })
+    .catch(function(err) {
+      res.json(err);
+    });
+});
+
+app.post("/addnote/:id", function(req, res) {
+  db.Note.create(req.body)
+    .then(function(dbNote) {
+      return db.Article.findOneAndUpdate({ _id: req.params.id }, { note: dbNote._id }, { new: true });
+    })
+    .then(function(dbArticle) {
+      res.json(dbArticle);
+    })
+    .catch(function(err) {
+      res.json(err);
+    });
+});
+
+app.post("/savearticle/:id", function(req, res) {
+  db.Article.findOneAndUpdate({_id: req.params.id }, { saveArticle: true })
+    .then(function(dbArticle) {
+      res.json(dbArticle);
+    })
+    .catch(function(err) {
+      res.json(err);
+    });
+});
+
+app.post("/deletearticle/:id", function(req, res) {
+  db.Article.findOneAndUpdate({_id: req.params.id }, { saveArticle: false })
+    .then(function(dbArticle) {
+      res.json("Article Deleted");
+    })
+    .catch(function(err) {
+      res.json(err);
+    });
+});
+
 
 // Start the server
 app.listen(PORT, function() {
